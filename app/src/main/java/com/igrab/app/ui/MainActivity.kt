@@ -1,4 +1,3 @@
-cat > app/src/main/java/com/igrab/app/ui/MainActivity.kt << 'KOTLIN'
 package com.igrab.app.ui
 
 import android.content.Intent
@@ -49,19 +48,19 @@ class MainActivity : AppCompatActivity() {
             val url = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
             if (url.contains("instagram.com")) {
                 binding.urlInput.setText(url.trim())
-                Toast.makeText(this, "URL do Instagram detectada!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "URL detectada!", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private fun setupUI() {
-        mediaAdapter = MediaAdapter { file -> openOrShareFile(file) }
+        mediaAdapter = MediaAdapter { file: FileInfo -> openOrShareFile(file) }
         binding.mediaGrid.apply {
             layoutManager = GridLayoutManager(this@MainActivity, 2)
             adapter = mediaAdapter
         }
 
-        historyAdapter = HistoryAdapter { job -> showJobDetail(job) }
+        historyAdapter = HistoryAdapter { job: DownloadJob -> showJobDetail(job) }
         binding.historyList.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = historyAdapter
@@ -96,7 +95,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupObservers() {
-        vm.downloadState.observe(this) { state ->
+        vm.downloadState.observe(this) { state: DownloadState ->
             when (state) {
                 is DownloadState.Idle -> showIdle()
                 is DownloadState.Running -> showRunning(state.url)
@@ -105,11 +104,11 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        vm.logLines.observe(this) { lines ->
+        vm.logLines.observe(this) { lines: List<String> ->
             binding.logBox.text = lines.joinToString("\n")
         }
 
-        vm.serverOnline.observe(this) { online ->
+        vm.serverOnline.observe(this) { online: Boolean? ->
             when (online) {
                 true -> {
                     binding.serverChip.text = "Servidor online ✓"
@@ -123,7 +122,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        vm.jobHistory.observe(this) { jobs ->
+        vm.jobHistory.observe(this) { jobs: List<DownloadJob> ->
             historyAdapter.submitList(jobs)
             binding.historySection.isVisible = jobs.isNotEmpty()
         }
@@ -173,7 +172,6 @@ class MainActivity : AppCompatActivity() {
         }
         val uri = FileProvider.getUriForFile(this, "$packageName.provider", f)
         val mime = if (file.type == "video") "video/*" else "image/*"
-
         AlertDialog.Builder(this, R.style.Theme_IGrab_Dialog)
             .setTitle(file.name)
             .setItems(arrayOf("Abrir", "Compartilhar")) { _, which ->
@@ -217,7 +215,6 @@ class MainActivity : AppCompatActivity() {
         val cookiesInput = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.settingsCookies)
         serverInput.setText(vm.getServerUrl())
         cookiesInput.setText(vm.getCookies())
-
         AlertDialog.Builder(this, R.style.Theme_IGrab_Dialog)
             .setTitle("⚙️ Configurações")
             .setView(view)
@@ -232,4 +229,3 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 }
-KOTLIN
