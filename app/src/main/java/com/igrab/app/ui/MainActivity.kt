@@ -1,15 +1,15 @@
+cat > app/src/main/java/com/igrab/app/ui/MainActivity.kt << 'KOTLIN'
 package com.igrab.app.ui
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
-import android.view.View
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.igrab.app.R
@@ -17,6 +17,7 @@ import com.igrab.app.data.DownloadJob
 import com.igrab.app.data.DownloadStatus
 import com.igrab.app.data.FileInfo
 import com.igrab.app.databinding.ActivityMainBinding
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -25,7 +26,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private val vm: MainViewModel by viewModels()
-
     private lateinit var mediaAdapter: MediaAdapter
     private lateinit var historyAdapter: HistoryAdapter
 
@@ -33,7 +33,6 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
         setupUI()
         setupObservers()
         handleSharedIntent(intent)
@@ -45,7 +44,6 @@ class MainActivity : AppCompatActivity() {
         handleSharedIntent(intent)
     }
 
-    // ── Intent de compartilhamento (share de outros apps) ────────────
     private fun handleSharedIntent(intent: Intent?) {
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             val url = intent.getStringExtra(Intent.EXTRA_TEXT) ?: return
@@ -56,23 +54,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Setup ─────────────────────────────────────────────────────────
     private fun setupUI() {
-        // RecyclerView de mídias baixadas
         mediaAdapter = MediaAdapter { file -> openOrShareFile(file) }
         binding.mediaGrid.apply {
             layoutManager = GridLayoutManager(this@MainActivity, 2)
             adapter = mediaAdapter
         }
 
-        // RecyclerView de histórico
         historyAdapter = HistoryAdapter { job -> showJobDetail(job) }
         binding.historyList.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = historyAdapter
         }
 
-        // Botão baixar
         binding.btnDownload.setOnClickListener {
             val url = binding.urlInput.text.toString().trim()
             if (url.isEmpty()) {
@@ -84,30 +78,23 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             binding.urlInputLayout.error = null
-            val cookies = vm.getCookies()
-            vm.download(url, cookies)
+            vm.download(url, vm.getCookies())
         }
 
-        // Botão nova URL (após download)
         binding.btnNewDownload.setOnClickListener {
             vm.resetState()
             binding.urlInput.text?.clear()
         }
 
-        // Botão configurações
         binding.btnSettings.setOnClickListener { showSettingsDialog() }
-
-        // Chip de status do servidor
         binding.serverChip.setOnClickListener { vm.checkServer() }
 
-        // Expandir/recolher log
         binding.logHeader.setOnClickListener {
             binding.logBox.isVisible = !binding.logBox.isVisible
             binding.logArrow.rotation = if (binding.logBox.isVisible) 180f else 0f
         }
     }
 
-    // ── Observadores ─────────────────────────────────────────────────
     private fun setupObservers() {
         vm.downloadState.observe(this) { state ->
             when (state) {
@@ -120,31 +107,19 @@ class MainActivity : AppCompatActivity() {
 
         vm.logLines.observe(this) { lines ->
             binding.logBox.text = lines.joinToString("\n")
-            if (lines.isNotEmpty()) {
-                val scrollAmount = binding.logBox.layout?.getLineBottom(lines.size - 1) ?: 0
-                binding.logScrollView.smoothScrollTo(0, scrollAmount)
-            }
         }
 
         vm.serverOnline.observe(this) { online ->
             when (online) {
                 true -> {
                     binding.serverChip.text = "Servidor online ✓"
-                    binding.serverChip.chipBackgroundColor =
-                        getColorStateList(R.color.chip_online)
                     binding.serverBanner.isVisible = false
                 }
                 false -> {
                     binding.serverChip.text = "Servidor offline"
-                    binding.serverChip.chipBackgroundColor =
-                        getColorStateList(R.color.chip_offline)
                     binding.serverBanner.isVisible = true
                 }
-                null -> {
-                    binding.serverChip.text = "Verificando..."
-                    binding.serverChip.chipBackgroundColor =
-                        getColorStateList(R.color.chip_checking)
-                }
+                null -> binding.serverChip.text = "Verificando..."
             }
         }
 
@@ -154,7 +129,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Estados visuais ───────────────────────────────────────────────
     private fun showIdle() {
         binding.inputCard.isVisible = true
         binding.progressCard.isVisible = false
@@ -167,7 +141,7 @@ class MainActivity : AppCompatActivity() {
         binding.inputCard.isVisible = false
         binding.progressCard.isVisible = true
         binding.resultCard.isVisible = false
-        binding.progressUrl.text = shortenUrl(url)
+        binding.progressUrl.text = if (url.length > 50) url.take(47) + "..." else url
         binding.statusBadge.text = "⏳ Baixando..."
         binding.statusBadge.setBackgroundResource(R.drawable.badge_running)
         binding.logBox.isVisible = true
@@ -191,11 +165,12 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
     }
 
-    // ── Abrir / compartilhar arquivo ──────────────────────────────────
     private fun openOrShareFile(file: FileInfo) {
         val f = File(file.path)
-        if (!f.exists()) { Toast.makeText(this, "Arquivo não encontrado", Toast.LENGTH_SHORT).show(); return }
-
+        if (!f.exists()) {
+            Toast.makeText(this, "Arquivo não encontrado", Toast.LENGTH_SHORT).show()
+            return
+        }
         val uri = FileProvider.getUriForFile(this, "$packageName.provider", f)
         val mime = if (file.type == "video") "video/*" else "image/*"
 
@@ -218,7 +193,6 @@ class MainActivity : AppCompatActivity() {
             }.show()
     }
 
-    // ── Detalhe de job histórico ──────────────────────────────────────
     private fun showJobDetail(job: DownloadJob) {
         val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
         val date = sdf.format(Date(job.createdAt))
@@ -228,25 +202,19 @@ class MainActivity : AppCompatActivity() {
             DownloadStatus.RUNNING -> "⏳ Rodando"
             DownloadStatus.PENDING -> "⏸ Pendente"
         }
-
         AlertDialog.Builder(this, R.style.Theme_IGrab_Dialog)
             .setTitle("Download · $date")
             .setMessage("URL: ${job.url}\n\nStatus: $status")
             .setPositiveButton("OK", null)
             .setNegativeButton("Remover") { _, _ ->
-                androidx.lifecycle.lifecycleScope.launchWhenStarted {
-                    vm.repo.deleteJob(job)
-                }
-            }
-            .show()
+                lifecycleScope.launch { vm.repo.deleteJob(job) }
+            }.show()
     }
 
-    // ── Configurações ─────────────────────────────────────────────────
     private fun showSettingsDialog() {
         val view = layoutInflater.inflate(R.layout.dialog_settings, null)
         val serverInput = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.settingsServerUrl)
         val cookiesInput = view.findViewById<com.google.android.material.textfield.TextInputEditText>(R.id.settingsCookies)
-
         serverInput.setText(vm.getServerUrl())
         cookiesInput.setText(vm.getCookies())
 
@@ -258,11 +226,10 @@ class MainActivity : AppCompatActivity() {
                 val cookies = cookiesInput.text.toString().trim()
                 vm.saveServerUrl(url)
                 vm.saveCookies(cookies)
-                Toast.makeText(this, "Configurações salvas!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Salvo!", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancelar", null)
             .show()
     }
-
-    private fun shortenUrl(url: String) = if (url.length > 50) url.take(47) + "..." else url
 }
+KOTLIN
