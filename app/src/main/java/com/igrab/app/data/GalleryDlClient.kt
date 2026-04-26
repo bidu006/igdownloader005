@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
  * Cliente HTTP para o servidor Flask (gallery-dl) rodando localmente.
  * Por padrão usa localhost:5000, mas o usuário pode mudar nas configurações.
  */
-class GalleryDlClient(private val baseUrl: String = "http://localhost:5000") {
+class GalleryDlClient(private val baseUrl: String = "http://127.0.0.1:5000") {
 
     private val gson = Gson()
     private val client = OkHttpClient.Builder()

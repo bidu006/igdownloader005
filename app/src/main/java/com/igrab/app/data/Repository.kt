@@ -15,7 +15,7 @@ class DownloadRepository(context: Context) {
         context.getSharedPreferences("igrab_prefs", Context.MODE_PRIVATE)
 
     val serverUrl: String
-        get() = prefs.getString("server_url", "http://localhost:5000") ?: "http://localhost:5000"
+        get() = prefs.getString("server_url", "http://127.0.0.1:5000") ?: "http://127.0.0.1:5000"
 
     val client: GalleryDlClient
         get() = GalleryDlClient(serverUrl)
